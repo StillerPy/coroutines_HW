@@ -5,9 +5,7 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.*
 import okhttp3.*
 import okhttp3.logging.HttpLoggingInterceptor
-import ru.netology.coroutines.dto.Comment
-import ru.netology.coroutines.dto.Post
-import ru.netology.coroutines.dto.PostWithComments
+import ru.netology.coroutines.dto.*
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.EmptyCoroutineContext
@@ -136,9 +134,24 @@ fun main() {
         launch {
             try {
                 val postsWithComments = getPosts(client)
-                    .map { post ->
+                    .map { serverPost: ServerPost ->
+                        val author = getAuthor(client, serverPost.authorId)
+                        val post = Post(serverPost.id,
+                            author.name,
+                            author.avatar,
+                            serverPost.content,
+                            serverPost.published,
+                            serverPost.likedByMe,
+                            serverPost.likes
+                            )
                         async {
-                            PostWithComments(post, getComments(client, post.id))
+                            val serverComments = getComments(client, post.id)
+                            val comments = serverComments.map {
+                                val author = getAuthor(client, it.authorId)
+                                Comment(it.id, author.name, author.avatar,
+                                    it.content, it.published, it.likedByMe, it.likes)
+                            }
+                            PostWithComments(post, comments)
                         }
                     }.awaitAll()
                 for (postWithComment in postsWithComments) {
@@ -183,8 +196,11 @@ suspend fun <T> makeRequest(url: String, client: OkHttpClient, typeToken: TypeTo
             }
     }
 
-suspend fun getPosts(client: OkHttpClient): List<Post> =
-    makeRequest("$BASE_URL/api/slow/posts", client, object : TypeToken<List<Post>>() {})
+suspend fun getPosts(client: OkHttpClient): List<ServerPost> =
+    makeRequest("$BASE_URL/api/slow/posts", client, object : TypeToken<List<ServerPost>>() {})
 
-suspend fun getComments(client: OkHttpClient, id: Long): List<Comment> =
-    makeRequest("$BASE_URL/api/slow/posts/$id/comments", client, object : TypeToken<List<Comment>>() {})
+suspend fun getComments(client: OkHttpClient, id: Long): List<ServerComment> =
+    makeRequest("$BASE_URL/api/slow/posts/$id/comments", client, object : TypeToken<List<ServerComment>>() {})
+
+suspend fun getAuthor(client: OkHttpClient, id: Long): Author =
+    makeRequest("$BASE_URL/api/slow/authors/$id", client, object : TypeToken<Author>() {})
